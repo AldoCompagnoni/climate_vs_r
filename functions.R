@@ -63,27 +63,54 @@ formatDemographicSite=function(x,replication=10){
   summ=summarise(group_by(x,year,site,species),abund=sum(abund,na.rm=T))
   if(sum(summ$abund==0,na.rm=T)>0) summ=summ[-which(summ$abund==0),]
   
-  #Find species with at least 10 transitions enough replication
-  allSpp=colnames(table(summ[,c("year","species")])) #Total spp list
-  sppList=allSpp[which(apply(table(summ[,c("year","species")])>0,2,sum)>10)]
-  
+  #Find species with at least 
+  #i)   10 transitions (years)
+  #ii)  2 sites at least
+  #iii) 20 data points at least
+  sppListRaw  <- unique(summ$species)
+  sppList     <- NULL
+  for(i in 1:length(sppListRaw)){
+    
+    tmp <- subset(summ,species == sppListRaw[i])
+    if(length(unique(tmp$site)) > 1 & length(unique(tmp$year)) > 9) {
+      sppList = c(sppList,sppListRaw[i])
+    } 
+
+  }
+    
+  # Store growth rates in a new data frame 
   gr=NULL
-  for(i in 1:length(sppList)){
+  for(i in 1:length(sppList)){#
     
     tmp=subset(summ,species==sppList[i])
-    dataWide=dcast(tmp,year ~ site,mean,na.rm=T,value.var="abund")
-    if(contiguousY(dataWide$year)==F) { #produce continuous sequence of years (if needed) 
+    dataWide=spread(tmp,site,abund,fill=NA)
+    # produce continuous sequence of years (if needed) 
+    if(contiguousY(dataWide$year)==F) { 
       time=data.frame(year=seq(min(dataWide$year),max(dataWide$year),1))
       dataWide=merge(time,dataWide,all.x=T)
     }
-    for(k in 2:ncol(dataWide)) { dataWide[,k]=logGr(dataWide[,k]) }
-    dataWide$species=sppList[i]
-    sppGr=melt(dataWide,id.var=c("year","species")) 
-    names(sppGr)[3:4]=c("site","logGr")
+    
+    # Calculate growth rates
+    dataGr    <- dataWide
+    for(k in 3:ncol(dataGr)) { 
+      dataGr[,k]=logGr(data.frame(dataGr[,k])[,1])
+    }
+    sppGr <- gather(dataGr,site,logGr,-year,-species)
+    
+    # Store abundance at time Nt0
+    dataAbund       <- dataWide
+    dataAbund       <- gather(dataAbund,site,Nt0,-year,-species)
+    dataAbund       <- mutate(dataAbund,logNt0 = log(Nt0))
+    # Align years (sppGr$year refers to year t+1)
+    dataAbund$year    <- dataAbund$year + 1
+    
+    # merge
+    popGrowth=merge(dataAbund,sppGr)
+    
     #include data set only if there are > 10 replicate years for growth rates
-    grSampleIDs=which(!is.na(sppGr$logGr))
+    grSampleIDs=which(!is.na(popGrowth$logGr))
     yrSample=unique(sppGr$year[grSampleIDs])
-    if(length(yrSample)>replication) gr=rbind(gr,sppGr)
+    if(length(yrSample)>replication) gr=rbind(gr,popGrowth)
     
   }
   if(!is.null(gr)) {gr=gr[-which(is.na(gr$logGr)),]}
@@ -93,84 +120,103 @@ formatDemographicSite=function(x,replication=10){
 }
 
 
+
+
 #performs analyses, plots results, and returns general results!!!
 analysisRandom=function(pop,speciesL=NULL,meteoVars,
-                        organism,measure,LTERsite){
+                            organism,measure,LTERsite){
   
-  meteoVars2=paste0(meteoVars,"_2")
+  meteoVars2  <- paste0(meteoVars,"_2")
+  pop$site    <- as.factor(pop$site)
   if(is.null(speciesL)) speciesL=unique(pop$species)
   
-  newPop=NULL
-  for(i in 1:length(speciesL)) { 
-    tmp=subset(pop,species==speciesL[i])
-    if(length(unique(tmp$site))>2) newPop=rbind(newPop,tmp) 
-  }
-
   #Summary files
-  nSpp=length(unique(newPop$species))
+  nSpp   =length(speciesL)
   results=data.frame(R2=rep(NA,nSpp),quadratic=rep(NA,nSpp),curvature=rep(NA,nSpp),
                      bestAICweight=rep(NA,nSpp),bestPredictor=rep(NA,nSpp),repT=rep(NA,nSpp),
                      repS=rep(1,nSpp),species=rep(NA,nSpp),reps=rep(NA,nSpp),LTER=rep(LTERsite,nSpp),
                      taxa=rep(NA,nSpp),skewPred=rep(NA,nSpp),measure=rep(measure,nSpp),
-                     sensM=rep(NA,nSpp),sensV=rep(0,nSpp))
+                     sens=rep(NA,nSpp),cov_Nt0Meteo=rep(NA,nSpp))
   if(length(organism) == 1) results$taxa=rep(organism,nSpp)
-  if(length(organism) > 1) results$taxa=organism[which(speciesL %in% unique(newPop$species))]
+  if(length(organism) > 1) results$taxa=organism
+  
   
   #Loop across species
-  for(i in 1:length(unique(newPop$species))){
+  for(i in 1:length(speciesL)){
     
-    grD=subset(pop,species==unique(newPop$species)[i])
-
+    grD=subset(pop,species == speciesL[i])
     meteo=grD[,c("year",meteoVars)]
     meteo2=grD[,c("year",meteoVars2)]
     
     mod=list()
     nMetVars=(ncol(meteo)-1)
-    for(colID in 1:nMetVars){ #linear models
-      eval(parse(n=1,text=paste0("mod[[colID]]=lme(logGr ~ ",meteoVars[colID],",random = ~ 1 | year,data=grD)")))
+    for(col in 1:nMetVars){ #linear models
+      eval(parse(n=1,text=paste0("mod[[col]]=lme(logGr ~ ",
+                                 meteoVars[col]," + logNt0,random = ~ 1 | year,data=grD)")))
     }
-    for(colID in 1:nMetVars){ #quadratic models
-      eval(parse(n=1,text=paste0("mod[[colID+nMetVars]]=lme(logGr ~ ",meteoVars[colID]," + ",
-                                 meteoVars2[colID],", random = ~ 1 | year,data=grD)")))
+    
+    for(col in 1:nMetVars){ #quadratic models
+      eval(parse(n=1,text=paste0("mod[[col+nMetVars]]=lme(logGr ~ ",meteoVars[col]," + ",
+                                 meteoVars2[col]," + logNt0, random = ~ 1 | year,data=grD)")))
     }
+    # Only density dependence
+    mod[[length(mod)+1]]=lme(logGr ~ logNt0, random = ~ 1 | year,data=grD)
+    # NULL model
     mod[[length(mod)+1]]=lme(logGr ~ 1, random = ~ 1 | year,data=grD)
     
     #Model results
-    names(mod)=c(names(meteo)[-1],names(meteo2)[-1],"NULL")
+    names(mod)=c(names(meteo)[-1],names(meteo2)[-1],"DD","NULL")
     bestMod=AICtable(mod)$model_n[1]
     bestVariab=gsub("_2","",names(mod)[bestMod])
     xI=grep(paste0("\\b",bestVariab,"\\b"),names(meteo)) #"\\b" gets the exact match
+    betas <- fixef(mod[[bestMod]])
     
-    if(sum(xI)==0) { xI=2}
-    colorz=as.numeric(grD$site)
-    plot(grD$logGr ~ meteo[,xI],pch=16,main=unique(newPop$species)[i],
-         col=colorz,xlab=names(meteo)[xI],ylab=expression("log("*lambda*")"))
-    xSeq=seq(min(meteo[,xI]),max(meteo[,xI]),by=0.1)
-    betas=as.numeric(fixef(mod[[bestMod]]))
-    
-    #Graphs (and sensitivity analysis)
-    cM=mean(meteo[,xI],na.rm=T)
-    cV=var(meteo[,xI],na.rm=T)
-    sensMean=sensVariance=0 #for null models
-    #best model is linear
-    if(bestMod < (nMetVars+1)){ 
-      yMean=betas[1] + betas[2]*xSeq ; lines(xSeq,yMean,lwd=2) 
-      sensMean      <-  (cM*0.01) / cM
-      sensVariance  <-  0 
-    } 
-    #best model is quadratic
-    if(bestMod > nMetVars & bestMod < length(mod)){ 
-      yMean=betas[1] + betas[2]*xSeq + betas[3]*xSeq^2 ; lines(xSeq,yMean,lwd=2) 
-      sensMean        <- (((2*betas[3]*cM + betas[2])*cM) / (((betas[2]*cM)+(betas[3]*cM^2)) + (betas[3]*cV))) * ((cM*0.01) / cM)
-      sensVariance    <- ( (betas[3]*cV) / (((betas[2]*cM)+(betas[3]*cM^2)) + (betas[3]*cV)) ) * ((cV*0.01) / cV)
+    #Print if best model is just density dependent
+    if(names(mod)[bestMod] == "DD"){
+      plot(grD$logGr ~ grD$logNt0,pch=16,col="grey",main=speciesL[i],
+           xlab=expression("log(N"[t]*")"),ylab=expression("log("*lambda*")"))
+      xN    <- seq(min(grD$logNt0),max(grD$logNt0),length.out = 100)
+      yPred <- betas[1] + betas[2] * xN
+      lines(xN,yPred,lwd=2)
+      sens=NA
+    } else { #Otherwise, proceed as "usual"
+      
+      if(sum(xI)==0) { xI=2 }
+      plot(grD$logGr ~ meteo[,xI],pch=16,main=speciesL[i],
+           xlab=names(meteo)[xI],ylab=expression("log("*lambda*")"))
+      #Meteo sequence
+      xSeq=seq(min(meteo[,xI]),max(meteo[,xI]),by=0.1)
+      nSeq=seq(min(meteo[,xI]),max(meteo[,xI]),by=0.1)
+      
+      # Graphs (and sensitivity analysis)
+      sens=NA
+      mM=mean(meteo[,xI],na.rm=T)
+      # best model is linear
+      if(bestMod < (nMetVars+1)){ 
+        yMean <- betas[1] + betas[2]*xSeq + betas[3]*mean(grD$logNt0)
+        lines(xSeq,yMean,lwd=2) 
+        #y1=betas[1] + betas[2]*(mM*1.01)
+        #y2=betas[1] + betas[2]*(mM*0.99)
+        #sens=y1-y2
+      } 
+      # best model is quadratic
+      if(bestMod > nMetVars & bestMod < length(mod)){ 
+        yMean <- betas[1] + betas[2]*xSeq + betas[3]*xSeq^2 + betas[4]*mean(grD$logNt0)
+        lines(xSeq,yMean,lwd=2) 
+        #y1=betas[1] + betas[2]*(mM*1.01) + betas[3]*(mM*1.01)^2
+        #y2=betas[1] + betas[2]*(mM*0.99) + betas[3]*(mM*0.99)^2 
+        #sens=y1-y2
+      }
+      
     }
     
     #Write up results
     #results$R2[i]=summary(mod[[bestMod]])$adj.r.squared
-    if(bestMod==length(mod)) results$quadratic[i]="NULL"
+    if(bestMod == length(mod)) results$quadratic[i]="NULL"
+    if(bestMod == (length(mod)-1) ) results$quadratic[i]="DD"
     if(bestMod < (nMetVars+1)) results$quadratic[i]="linear"
-    if(bestMod > nMetVars & bestMod < length(mod)) {
-      results$quadratic[i]="quadratic" ; results$curvature[i]=fixef(mod[[bestMod]])[3]
+    if(bestMod > nMetVars & bestMod < (length(mod)-1) ) {
+      results$quadratic[i]="quadratic" ; results$curvature[i]=coef(mod[[bestMod]])[3]
     }
     results$species[i]=speciesL[i]
     results$bestAICweight[i]=AICtable(mod)$weights[1]
@@ -178,9 +224,12 @@ analysisRandom=function(pop,speciesL=NULL,meteoVars,
     results$repT[i]=length(unique(grD$year))
     results$repS[i]=mean(table(grD$year))
     results$reps[i]=nrow(grD)
-    results$sensM[i]=sensMean
-    results$sensV[i]=sensVariance
-    if(results$bestPredictor[i]!="NULL") results$skewPred[i]=skewness(meteo[,results$bestPredictor[i]])
+    results$sens[i]=sens
+    #results$cov_Nt0Meteo[i]=
+    if(results$bestPredictor[i]!="NULL" & results$bestPredictor[i]!="DD") {
+      results$skewPred[i]=skewness(meteo[,results$bestPredictor[i]])
+    }
+    
   }
   
   return(results)
