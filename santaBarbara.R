@@ -1,6 +1,9 @@
 #This script runs preliminary analyses on LTER data
 setwd("C:/Users/ac79/MEGA/Projects/RICE/LTER/")
-source("Analysis1/functions.R")
+source("C:/Users/ac79/Documents/CODE/climate_vs_r/functions.R")
+
+# PROBLEM HERE: meteorological data starts from 2002 only.
+
 
 #DATA
 #Climate
@@ -89,8 +92,15 @@ names(meteoData)[4:5]=paste0(names(meteoData)[2:3],"_2")
 #Fishes----------------------------------------------------------------------------------------
 fishD=merge(fishGr,meteoData)
 
+# Remove species whose models do not converge
+fishD = subset(fishD, species != "SPUL")
+fishD = subset(fishD, species != "CSTI")
+fishD = subset(fishD, species != "OELO")
+
+cia=subset(fishD, species != "EL_1")
+
 tiff("Results1/SB_Fishes.tiff",unit="in",width=6.3,height=8,res=500,compression="lzw")
-par(mfrow=c(6,5),mar=c(2,2,1,0.2),mgp=c(1,0.5,0))
+par(mfrow=c(7,5),mar=c(2,2,1,0.2),mgp=c(1,0.5,0))
 resFish=analysisRandom(pop=fishD,
                        meteoVars=names(meteoData)[2:3],
                        measure="count",
