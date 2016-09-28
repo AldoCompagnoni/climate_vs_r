@@ -1,5 +1,5 @@
 #This script runs preliminary analyses on LTER data
-setwd("C:/Users/ac79/MEGA/Projects/RICE/LTER/")
+setwd("C:/Users/ac79/MEGA/Projects/LTER/")
 source("C:/Users/ac79/Documents/CODE/climate_vs_r/functions.R")
 
 # PROBLEM HERE: meteorological data starts from 2002 only.
@@ -34,6 +34,7 @@ ben_cov=read.csv("Data/Santa Barabara/SCI_Cover_All_Years_SchmittRussell.csv")
 fish1=fish[-which(fish$COUNT==-99999),] #Remove NAs
 names(fish1)[c(5,6,7,8,10)]=c("sp_1","sp_2","sp_3","species","abund")
 fish1=fish1[,c("year","site","sp_1","sp_2","sp_3","species","abund")]
+fish1=subset(fish1,species != "NF") # Remove "not found" species
 fish1Gr=formatDemographicSite(fish1)
 
 #Fishes 2------------------------------------------------------------------------------
@@ -92,15 +93,8 @@ names(meteoData)[4:5]=paste0(names(meteoData)[2:3],"_2")
 #Fishes----------------------------------------------------------------------------------------
 fishD=merge(fishGr,meteoData)
 
-# Remove species whose models do not converge
-fishD = subset(fishD, species != "SPUL")
-fishD = subset(fishD, species != "CSTI")
-fishD = subset(fishD, species != "OELO")
-
-cia=subset(fishD, species != "EL_1")
-
 tiff("Results1/SB_Fishes.tiff",unit="in",width=6.3,height=8,res=500,compression="lzw")
-par(mfrow=c(7,5),mar=c(2,2,1,0.2),mgp=c(1,0.5,0))
+par(mfrow=c(6,5),mar=c(2,2,1,0.2),mgp=c(1,0.5,0))
 resFish=analysisRandom(pop=fishD,
                        meteoVars=names(meteoData)[2:3],
                        measure="count",
@@ -112,6 +106,9 @@ dev.off()
 invD=merge(invGr,meteoData)
 inv[inv$species %in% unique(invD$species)[21],]$TAXON_PHYLUM="Mollusca"
 phylum=NULL ; for(t in 1:length(unique(invD$species))){ phylum=c(phylum,unique(subset(inv,species==unique(invD$species)[t])$inv[inv$species %in% unique(invD$species)[21],]$TAXON_PHYLUM)) }
+
+# remove a species whose models do not converge
+invD <- subset(invD,species != "PAST")
 
 tiff("Results1/SB_Invertebrates.tiff",unit="in",width=6.3,height=9,res=500,compression="lzw")
 par(mfrow=c(9,5),mar=c(2,2,1,0.2),mgp=c(1,0.5,0))
@@ -135,25 +132,26 @@ dev.off()
 #Benthic weight------------------------------------------------------------------------------
 ben_wD=merge(ben_wGr,meteoData)
 
-#I WILL NOT REPORT GTHESE RESULTS.
-par(mfrow=c(3,2),mar=c(2,2,1,0.2),mgp=c(1,0.5,0))
-resBen_W=analysisRandom(pop=ben_wD,
-                      meteoVars=names(meteoData)[2:3],measure="weight",
-                      organism="algae",LTERsite="SantaBarbara")
+#Do NOT REPORT GTHESE RESULTS (re-check later)
+#par(mfrow=c(3,2),mar=c(2,2,1,0.2),mgp=c(1,0.5,0))
+#resBen_W=analysisRandom(pop=ben_wD,
+#                      meteoVars=names(meteoData)[2:3],measure="weight",
+#                      organism="algae",LTERsite="SantaBarbara")
 
 #Benthic cover------------------------------------------------------------------------------
 ben_covD=merge(ben_covGr,meteoData)
 phylum=NULL ; for(t in 1:length(unique(ben_covD$species))){ phylum=c(phylum,unique(subset(ben_cov,SP_CODE==unique(ben_covD$species)[t])$TAXON_PHYLUM)) }
 phylum=phylum[-26]
-# Remove psecies number 26 (model does not converge)
+# Remove species whose model does not converge
 ben_covD=subset(ben_covD,species != "Lf")
+
 
 tiff("Results1/SB_Algae.tiff",unit="in",width=6.3,height=9,res=500,compression="lzw")
 par(mfrow=c(7,4),mar=c(2,2,1,0.2),mgp=c(1,0.5,0))
-resAlgae=analysisRandom(pop=ben_covD,
-                        speciesL=unique(ben_covD$species)[c(1:25,27)], #26 does not converge
-                        meteoVars=names(meteoData)[2:3],measure="cover",
-                        organism=phylum,LTERsite="SantaBarbara")
+resAlgae=analysisRandom(pop=ben_covD, #26 and 27 does not converge
+                        meteoVars=names(meteoData)[2:3],
+                        measure="cover",
+                        organism="algae",LTERsite="SantaBarbara")
 dev.off()
 
 

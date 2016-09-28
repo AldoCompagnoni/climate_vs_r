@@ -1,7 +1,7 @@
 #Data on Palmer's zooplankton data
-setwd("C:/Users/ac79/MEGA/Projects/RICE/LTER/")
+setwd("C:/Users/ac79/MEGA/Projects/LTER/")
 #Functions (AICTable, formatMeteoDate, logGr, contiguousY)
-source("Analysis1/functions.R")
+source("C:/Users/ac79/Documents/CODE/climate_vs_r/functions.R")
 
 #DATA#####################################################################
 
@@ -33,6 +33,7 @@ zooLong2=melt(zoo2tmp,id.vars=c("year","GridLine"))
 names(zooLong2)=c("year","site","species","abund")
 
 zooAll=rbind(zooLong,zooLong2)
+zooAll$species=as.character(zooAll$species)
 zooGr=formatDemographicSite(zooAll)
 
 
@@ -272,14 +273,18 @@ for(i in 1:25) newNames[i]=gsub("Num","",newNames[i])
 for(i in 1:25) newNames[i]=gsub("Vol","",newNames[i])
 for(i in 1:25) zooD$species[zooD$species %in% orig[i]]=newNames[i]
 
+zooD <- zooD[-which(zooD$Nt0 < 0),]
+zooD <- zooD[-which(is.na(zooD$logNt0)),]
 
 tiff("Results1/plamer_zooplankton.tiff",unit="in",height=5,width=6.3,res=500,compression="lzw")
 
 par(mfrow=c(6,5),mar=c(2.3,2.8,1,0.1),mgp=c(1.3,0.5,0))
 resZoo=analysisRandom(pop=zooD,
-                      speciesL=unique(zooD$species)[1:25],measure="density",
+                      #speciesL=unique(zooD$species)[1:25],
+                      measure="density",
                       meteoVars=names(meteoData1)[2:5],
-                      organism="zooplankton",LTERsite="Palmer")
+                      organism="zooplankton",
+                      LTERsite="Palmer")
 dev.off()
 
 

@@ -1,6 +1,6 @@
-setwd("C:/Users/ac79/MEGA/Projects/RICE/LTER/")
+setwd("C:/Users/ac79/MEGA/Projects/LTER/")
 #Functions
-source("Analysis1/functions.R")
+source("C:/Users/ac79/Documents/CODE/climate_vs_r/functions.R")
 
 
 #DATA#####################################################################

@@ -1,5 +1,5 @@
-setwd("C:/Users/ac79/MEGA/Projects/RICE/LTER/")
-source("Analysis1/functions.R")
+setwd("C:/Users/ac79/MEGA/Projects/LTER/")
+source("C:/Users/ac79/Documents/CODE/climate_vs_r/functions.R")
 
 #Data
 #climatic
@@ -64,12 +64,14 @@ fish=cbind(tmpMat,fish)
 
 fishGr=melt(fish[,c(3,7,10:28)],id.vars=c("year","watershed"))
 names(fishGr)=c("year","site","species","abund")
+fishGr$species = as.character(fishGr$species)
 fishGr=formatDemographicSite(fishGr)
 
 
 #small mammals-----------------------------------------------------------------
 mammGr=melt(mamm[,c(4,6,7:21)],id.vars=c("RECYEAR","WATERSHED.LINE"))
 names(mammGr)=c("year","site","species","abund")
+mammGr$species = as.character(mammGr$species)
 mammGr=formatDemographicSite(mammGr)
 
 
@@ -136,45 +138,48 @@ resVegCover1=analysisRandom(pop=covD,speciesL=sppRank$species[1:25],
                             meteoVars=names(meteoData)[2:7],measure="cover",
                             organism="plant",LTERsite="Konza")
 dev.off()
-tiff("Results1/konza_vegetation2.tiff",unit="in",height=8,width=6.3,res=500,compression="lzw")
 
-par(mfrow=c(5,5),mar=c(2.3,2.5,1.2,0.1),mgp=c(1.3,0.5,0))
-resVegCover2=analysisRandom(pop=covD,speciesL=sppRank$species[26:50],
-                            meteoVars=names(meteoData)[2:7],measure="cover",
-                            organism="plant",LTERsite="Konza")
-dev.off()
-tiff("Results1/konza_vegetation3.tiff",unit="in",height=8,width=6.3,res=500,compression="lzw")
+# all results
+resVegCover=analysisRandom(pop=covD,
+                           meteoVars=names(meteoData)[2:7],measure="cover",
+                           organism="plant",LTERsite="Konza")
 
-par(mfrow=c(5,5),mar=c(2.3,2.5,1.2,0.1),mgp=c(1.3,0.5,0))
-resVegCover3=analysisRandom(pop=covD,speciesL=sppRank$species[51:75],
-                            meteoVars=names(meteoData)[2:7],measure="cover",
-                            organism="plant",LTERsite="Konza")
-dev.off()
-tiff("Results1/konza_vegetation4.tiff",unit="in",height=8,width=6.3,res=500,compression="lzw")
+#tiff("Results1/konza_vegetation2.tiff",unit="in",height=8,width=6.3,res=500,compression="lzw")
 
-par(mfrow=c(5,5),mar=c(2.3,2.5,1.2,0.1),mgp=c(1.3,0.5,0))
-resVegCover4=analysisRandom(pop=covD,speciesL=sppRank$species[c(76:98,100)],#99 does not converge!
-                            meteoVars=names(meteoData)[2:7],measure="cover",
-                            organism="plant",LTERsite="Konza")
-dev.off()
-tiff("Results1/konza_vegetation5.tiff",unit="in",height=8,width=6.3,res=500,compression="lzw")
+#par(mfrow=c(5,5),mar=c(2.3,2.5,1.2,0.1),mgp=c(1.3,0.5,0))
+#resVegCover2=analysisRandom(pop=covD,speciesL=sppRank$species[c(26:28,30:50)],
+#                            meteoVars=names(meteoData)[2:7],measure="cover",
+#                            organism="plant",LTERsite="Konza")
+#dev.off()
+#tiff("Results1/konza_vegetation3.tiff",unit="in",height=8,width=6.3,res=500,compression="lzw")
 
-par(mfrow=c(5,5),mar=c(2.3,2.5,1.2,0.1),mgp=c(1.3,0.5,0))
-resVegCover5=analysisRandom(pop=covD,speciesL=sppRank$species[c(101:132)],
-                            meteoVars=names(meteoData)[2:7],measure="cover",
-                            organism="plant",LTERsite="Konza")
-dev.off()
+#par(mfrow=c(5,5),mar=c(2.3,2.5,1.2,0.1),mgp=c(1.3,0.5,0))
+#resVegCover3=analysisRandom(pop=covD,speciesL=sppRank$species[c(51:54,56:65,67:75)],
+#                            meteoVars=names(meteoData)[2:7],measure="cover",
+#                            organism="plant",LTERsite="Konza")
+#dev.off()
+#tiff("Results1/konza_vegetation4.tiff",unit="in",height=8,width=6.3,res=500,compression="lzw")#
+
+#par(mfrow=c(5,5),mar=c(2.3,2.5,1.2,0.1),mgp=c(1.3,0.5,0))
+#resVegCover4=analysisRandom(pop=covD,speciesL=sppRank$species[c(76:98,100)],#99 does not converge!
+#                            meteoVars=names(meteoData)[2:7],measure="cover",
+#                            organism="plant",LTERsite="Konza")
+#dev.off()
+#tiff("Results1/konza_vegetation5.tiff",unit="in",height=8,width=6.3,res=500,compression="lzw")
+
+#par(mfrow=c(5,5),mar=c(2.3,2.5,1.2,0.1),mgp=c(1.3,0.5,0))
+#resVegCover5=analysisRandom(pop=covD,speciesL=sppRank$species[c(101:132)],
+#                            meteoVars=names(meteoData)[2:7],measure="cover",
+#                            organism="plant",LTERsite="Konza")
+#dev.off()
 
 
-
-
-
-#Fish data---------------------------------------------------------------------------------
+# Fish data---------------------------------------------------------------------------------
 fishD=merge(fishGr,meteoData)
 
-tiff("Results1/konza_fish.tiff",unit="in",height=8,width=6.3,res=500,compression="lzw")
+tiff("Results1/konza_fish.tiff",unit="in",height=3.15,width=6.3,res=500,compression="lzw")
 
-par(mfrow=c(2,2),mar=c(2.3,2.5,1.2,0.1),mgp=c(1.3,0.5,0))
+par(mfrow=c(1,2),mar=c(2.3,2.5,1.2,0.1),mgp=c(1.3,0.5,0))
 resFish=analysisRandom(pop=fishD,speciesL=unique(fishD$species),
                      meteoVars=names(meteoData)[2:7],measure="count",
                      organism="fish",LTERsite="Konza")
@@ -194,8 +199,7 @@ dev.off()
 
 
 #write out all results
-results=rbind(resHopper,resVegCover1,resVegCover2,resVegCover3,
-              resVegCover4,resVegCover5,resFish,resMamm)
+results=rbind(resHopper,resVegCover,resFish,resMamm)
 write.csv(results,"Results1/resultsKonza.csv",row.names=F)
 
 

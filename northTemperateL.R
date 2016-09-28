@@ -1,6 +1,6 @@
 #This script runs preliminary analyses on LTER data
-setwd("C:/Users/ac79/MEGA/Projects/RICE/LTER/")
-source("Analysis1/functions.R")
+setwd("C:/Users/ac79/MEGA/Projects/LTER/")
+source("C:/Users/ac79/Documents/CODE/climate_vs_r/functions.R")
 
 #DATA
 #Climate data
@@ -147,19 +147,19 @@ zooD=merge(zooGr,meteoData)
 
 tiff("Results1/NTL_Zooplankton1.tiff",unit="in",width=6.3,height=9,res=500,compression="lzw")
 par(mfrow=c(7,5),mar=c(2,2,1,0.2),mgp=c(1,0.5,0))
-resZoo=analysisRandom(pop=zooD,speciesL=unique(zooD$species)[1:35],
+resZoo_1=analysisRandom(pop=zooD,speciesL=unique(zooD$species)[1:35],
                       meteoVars=names(meteoData)[2:5],measure="density",
                       organism="zooplankton",LTERsite="NorthTemperateLakes")
 dev.off()
 tiff("Results1/NTL_Zooplankton2.tiff",unit="in",width=6.3,height=9,res=500,compression="lzw")
-par(mfrow=c(6,5),mar=c(2,2,1,0.2),mgp=c(1,0.5,0))
-resZoo=analysisRandom(pop=zooD,speciesL=unique(zooD$species)[36:70],
+par(mfrow=c(7,5),mar=c(2,2,1,0.2),mgp=c(1,0.5,0))
+resZoo_2=analysisRandom(pop=zooD,speciesL=unique(zooD$species)[36:68],
                       meteoVars=names(meteoData)[2:5],measure="density",
                       organism="zooplankton",LTERsite="NorthTemperateLakes")
 dev.off()
 
 
 #write out
-results=rbind(resFish,resBen,resCray,resPela,resPla,resZoo)
+results=rbind(resFish,resBen,resCray,resPela,resPla,resZoo_1,resZoo_2)
 write.csv(results,"Results1/resultsNorthTempLakes.csv",row.names=F)
   

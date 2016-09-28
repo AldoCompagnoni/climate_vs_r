@@ -1,7 +1,8 @@
-setwd("C:/Users/Aldo/MEGA/Projects/RICE/LTER/")
+setwd("C:/Users/ac79/MEGA/Projects/LTER/")
 
 #Identify results files
 files=list.files("Results1")[grep("result",list.files("Results1"))]
+files=files[-2]
 #Put it together
 metaResults=NULL #
 for(i in 1:length(files)){
@@ -17,8 +18,11 @@ metaResults$quadraticSign=metaResults$quadratic
 metaResults$quadraticSign[metaResults$curvature>0]="quadPos"
 metaResults$quadraticSign[metaResults$curvature<0]="quadNeg"
 categories=summarise(group_by(metaResults,quadraticSign),count=n())
-categories$proportions=categories$count/501  
+categories$proportions=categories$count/sum(categories$count)  
 
+# Significant relationships
+climateCat             <- categories[c(2,4,5),] 
+climateCat$proportions <- climateCat$count/sum(climateCat$count)  
 
 #Ectotherm/Endotherms
 metaResults$ectotherms="ectotherm"

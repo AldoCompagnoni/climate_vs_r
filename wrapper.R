@@ -1,13 +1,15 @@
 #Wrapper that runs all analyses at once.
-setwd("C:/Users/ac79/MEGA/Projects/RICE/LTER/")
+setwd("C:/Users/ac79/MEGA/Projects/LTER/")
+dir="C:/Users/ac79/Documents/CODE/climate_vs_r/"
+
 
 #Analyses by LTER Site 
-source("Analysis1/santaBarbara.R")
-source("Analysis1/northTemperateL.R")
-source("Analysis1/cedarCreek.R")
-source("Analysis1/sevilleta.R")
-source("Analysis1/palmer.R")
-source("Analysis1/konza.R")
-source("Analysis1/bonanzaCreek.R")
+source(paste0(dir,"santaBarbara.R"))
+source(paste0(dir,"northTemperateL.R"))
+source(paste0(dir,"cedarCreek.R"))
+source(paste0(dir,"sevilleta.R"))
+source(paste0(dir,"palmer.R"))
+source(paste0(dir,"konza.R"))
+#source(paste0(dir,"bonanzaCreek.R"))
 
 #Meta analysis of results

@@ -1,6 +1,6 @@
 library(lubridate) ; library(dplyr)
 library(reshape2) ; library(moments)
-library(nlme)
+library(nlme) ; library(tidyr)
 options(stringsAsFactors = F)
 
 #Make my own AIC table. (NO COMMENT on AICtab() function from bbmle)
@@ -43,7 +43,8 @@ formatMeteoDate=function(x,format,separator){
   
 }
 
-#Function returns if a series of ingeters is continuous
+
+#Function tests whether series of ingeters is continuous
 #I use it to understand if there is a gap in a series of years
 contiguousY=function(x){
   minY=min(x)
@@ -53,39 +54,49 @@ contiguousY=function(x){
 }
 
 
-#This function formats demographic data
-#Format of the file should include:
-#Columns: year, site, species, abund (the latter for abundance)
-#'replication' is the minimum number of YEARS for which there is spp abundance data. 
-formatDemographicSite=function(x,replication=10){
-  
-  #Summarize by biggest replicate
-  summ=summarise(group_by(x,year,site,species),abund=sum(abund,na.rm=T))
-  if(sum(summ$abund==0,na.rm=T)>0) summ=summ[-which(summ$abund==0),]
+# Select species with enough replication
+enough_rep_sppList <- function(x){
   
   #Find species with at least 
   #i)   10 transitions (years)
   #ii)  2 sites at least
   #iii) 20 data points at least
-  sppListRaw  <- unique(summ$species)
-  sppList     <- NULL
+  sppListRaw  <- unique(x$species)
+  sppKeep     <- NULL
   for(i in 1:length(sppListRaw)){
     
-    tmp <- subset(summ,species == sppListRaw[i])
-    if(length(unique(tmp$site)) > 1 & length(unique(tmp$year)) > 9) {
-      sppList = c(sppList,sppListRaw[i])
+    tmp       <- subset(x,species == sppListRaw[i])
+    if(length(unique(tmp$site)) > 1 & length(unique(tmp$year)) > 9 & nrow(tmp) > 20) {
+      sppKeep <- c(sppKeep,sppListRaw[i])
     } 
-
-  }
     
+  }
+
+  return(sppKeep)
+  
+}
+
+
+# Formats demographic data
+# Input data frame should have four columns:
+# Columns: year, site, species, abund (the latter for abundance)
+#'replication' is the minimum number of YEARS for which there is spp abundance data. 
+formatDemographicSite=function(x,replication=10){
+  
+  #Summarize by biggest replicate
+  summ    <- summarise(group_by(x,year,site,species),abund=sum(abund,na.rm=T))
+  if(sum(summ$abund==0,na.rm=T)>0) summ=summ[-which(summ$abund==0),]
+  # keep species with enough replication
+  sppList <- enough_rep_sppList(summ)
+  
   # Store growth rates in a new data frame 
   gr=NULL
-  for(i in 1:length(sppList)){#
+  for(i in 1:length(sppList)){
     
     tmp=subset(summ,species==sppList[i])
     dataWide=spread(tmp,site,abund,fill=NA)
     # produce continuous sequence of years (if needed) 
-    if(contiguousY(dataWide$year)==F) { 
+    if(contiguousY(dataWide$year)==F) {
       time=data.frame(year=seq(min(dataWide$year),max(dataWide$year),1))
       dataWide=merge(time,dataWide,all.x=T)
     }
@@ -102,10 +113,10 @@ formatDemographicSite=function(x,replication=10){
     dataAbund       <- gather(dataAbund,site,Nt0,-year,-species)
     dataAbund       <- mutate(dataAbund,logNt0 = log(Nt0))
     # Align years (sppGr$year refers to year t+1)
-    dataAbund$year    <- dataAbund$year + 1
+    dataAbund$year  <- dataAbund$year + 1
     
     # merge
-    popGrowth=merge(dataAbund,sppGr)
+    popGrowth       <- merge(dataAbund,sppGr)
     
     #include data set only if there are > 10 replicate years for growth rates
     grSampleIDs=which(!is.na(popGrowth$logGr))
@@ -115,7 +126,10 @@ formatDemographicSite=function(x,replication=10){
   }
   if(!is.null(gr)) {gr=gr[-which(is.na(gr$logGr)),]}
   
-  return(gr) 
+  # re-check for species with enough replication
+  sppList <- enough_rep_sppList(gr)
+  out     <- gr[which(gr$species %in% sppList),]
+  return(out) 
   
 }
 
@@ -152,12 +166,11 @@ analysisRandom=function(pop,speciesL=NULL,meteoVars,
     nMetVars=(ncol(meteo)-1)
     for(col in 1:nMetVars){ #linear models
       eval(parse(n=1,text=paste0("mod[[col]]=lme(logGr ~ ",
-                                 meteoVars[col]," + logNt0,random = ~ 1 | year,data=grD)")))
+                                 meteoVars[col]," + logNt0,random = ~ 1 | site,data=grD)")))
     }
-    
     for(col in 1:nMetVars){ #quadratic models
       eval(parse(n=1,text=paste0("mod[[col+nMetVars]]=lme(logGr ~ ",meteoVars[col]," + ",
-                                 meteoVars2[col]," + logNt0, random = ~ 1 | year,data=grD)")))
+                                 meteoVars2[col]," + logNt0, random = ~ 1 | site,data=grD)")))
     }
     # Only density dependence
     mod[[length(mod)+1]]=lme(logGr ~ logNt0, random = ~ 1 | year,data=grD)
@@ -182,7 +195,7 @@ analysisRandom=function(pop,speciesL=NULL,meteoVars,
     } else { #Otherwise, proceed as "usual"
       
       if(sum(xI)==0) { xI=2 }
-      plot(grD$logGr ~ meteo[,xI],pch=16,main=speciesL[i],
+      plot(grD$logGr ~ meteo[,xI],pch=16,main=speciesL[i],col=grD$site,
            xlab=names(meteo)[xI],ylab=expression("log("*lambda*")"))
       #Meteo sequence
       xSeq=seq(min(meteo[,xI]),max(meteo[,xI]),by=0.1)
@@ -216,7 +229,7 @@ analysisRandom=function(pop,speciesL=NULL,meteoVars,
     if(bestMod == (length(mod)-1) ) results$quadratic[i]="DD"
     if(bestMod < (nMetVars+1)) results$quadratic[i]="linear"
     if(bestMod > nMetVars & bestMod < (length(mod)-1) ) {
-      results$quadratic[i]="quadratic" ; results$curvature[i]=coef(mod[[bestMod]])[3]
+      results$quadratic[i]="quadratic" ; results$curvature[i]=fixef(mod[[bestMod]])[3]
     }
     results$species[i]=speciesL[i]
     results$bestAICweight[i]=AICtable(mod)$weights[1]

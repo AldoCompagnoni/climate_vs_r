@@ -1,6 +1,6 @@
 #THE PLAN:
-setwd("C:/Users/ac79/MEGA/Projects/RICE/LTER/")
-source("Analysis1/functions.R")
+setwd("C:/Users/ac79/MEGA/Projects/LTER/")
+source("C:/Users/ac79/Documents/CODE/climate_vs_r/functions.R")
 
 #http://www.cedarcreek.umn.edu/research/data?EXPERIMENT_SEARCH=%25&search_words=&CORE_AREA=%25&RESEARCHERS_LNAME=&SEARCH=Search
 #Climate Data
@@ -20,16 +20,15 @@ hopper=read.table("Data/Cedar Creek/e014_Core Old Field Grasshopper Sampling .tx
 #Format plant biomass data##########################################################################
 #####################################################################################################
 
-#Biomass data-----------------------------------------------------------------------------------------
-#Remove nitrogen addition plots
-ccDat=subset(plantBioCC,NitrAdd==0)
-names(ccDat)[c(2,3,9,10)]=c("year","site","species","abund")
-bioGr=formatDemographicSite(ccDat[,c(2,3,9,10)])
-
-plantList=summarise(group_by(ccDat,species),abundance=sum(abund))
-plantList=plantList$species[order(plantList$abundance,decreasing=T)]
-
-#Grasshoppers-------------------------------------------------------------------
+# Biomass data-----------------------------------------------------------------------------------------
+# Remove nitrogen addition plots
+ccDat <- subset(plantBioCC,NitrAdd==0)
+ccDat <- rename(ccDat,year = Year, 
+                      site = Field, 
+                      species = Species, 
+                      abund = Biomass)
+bioGr <- formatDemographicSite(data.frame(select(ccDat,year,site,species,abund)))
+# Grasshopper data-------------------------------------------------------------------
 hopper$species=paste(hopper$Genus,hopper$Specific.epithet,sep="_")
 names(hopper)[c(3,4,11,12)]=c("site","year","abund","species")
 hopperGr=formatDemographicSite(hopper[,c(4,3,12,11)])
@@ -72,11 +71,37 @@ names(meteoData)[1]="year"
 #####################################################################################################
 
 #plant biomass-------------------------------------------------------------------------
-ccD=merge(bioGr,meteoData)
-ccD=subset(ccD,species!="Miscellaneous litter")
+ccD       <- merge(bioGr,meteoData)
+
+# Exclude records that are not "miscellaneous litter/herbs"
+ccD       <- subset(ccD,species!="Miscellaneous litter")
+ccD       <- subset(ccD,species!="Miscellaneous herbs")
+ccD       <- subset(ccD,species!="Mosses & lichens")
+
+# List of plants in decreasing order
+plantList <- summarise(group_by(ccD,species),abundance=sum(Nt0))
+plantList <- plantList$species[order(plantList$abundance,decreasing=T)]
 
 
-#grasshopper---------------------------------------------------------------------------
+tiff("Results1/cedarCreek_plant.tiff",unit="in",height=8,width=6.3,res=500,compression="lzw")
+par(mfrow=c(5,4),mar=c(2.3,2.5,1.2,0.1),mgp=c(1.3,0.5,0))
+resCC_1=analysisRandom(pop=ccD,speciesL = plantList[1:20],
+                     meteoVars=names(meteoData)[2:7],measure="biomass",
+                     organism="plant",LTERsite="CedarCreek")
+dev.off()
+resCC_2=analysisRandom(pop=ccD,speciesL = plantList[-c(1:20)],
+                      meteoVars=names(meteoData)[2:7],measure="biomass",
+                      organism="plant",LTERsite="CedarCreek")
+
+tiff("Results1/PoaPratensis.tiff",unit="in",height=6.3,width=6.3,res=500,compression="lzw")
+par(mfrow=c(1,1),mar=c(2.3,2.5,1.2,0.1),mgp=c(1.3,0.5,0))
+resCC=analysisRandom(pop=ccD,speciesL=plantList[2],
+                     meteoVars=names(meteoData)[2:7],measure="biomass",
+                     organism="plant",LTERsite="CedarCreek")
+dev.off()
+
+
+# Grasshopper---------------------------------------------------------------------------
 hopperD=merge(hopperGr,meteoData)
 
 tiff("Results1/cedarCreek_hopper.tiff",unit="in",height=5,width=6.3,res=500,compression="lzw")
@@ -88,45 +113,10 @@ resHopp=analysisRandom(pop=hopperD,speciesL=unique(hopperD$species),
                    LTERsite="CedarCreek")
 dev.off()
 
-#EIGHTEEN SPECIES WITH only TEMPORAL REPLICATION
-ccD=merge(ccD,meteoData)
-tiff("Results1/cedarCreek_plant.tiff",unit="in",height=8,width=6.3,res=500,compression="lzw")
-par(mfrow=c(5,4),mar=c(2.3,2.5,1.2,0.1),mgp=c(1.3,0.5,0))
-resCC=analysisRandom(pop=ccD,speciesL=plantList[c(2:3,5:length(plantList))],
-                     meteoVars=names(meteoData)[2:7],measure="biomass",
-                     organism="plant",LTERsite="CedarCreek")
-dev.off()
-
-tiff("Results1/PoaPratensis.tiff",unit="in",height=6.3,width=6.3,res=500,compression="lzw")
-par(mfrow=c(1,1),mar=c(2.3,2.5,1.2,0.1),mgp=c(1.3,0.5,0))
-resCC=analysisRandom(pop=ccD,speciesL=plantList[3],
-                     meteoVars=names(meteoData)[2:7],measure="biomass",
-                     organism="plant",LTERsite="CedarCreek")
-dev.off()
-
-
-tiff("Results1/cedarCreek_plant.tiff",unit="in",height=8,width=6.3,res=500,compression="lzw")
-par(mfrow=c(5,4),mar=c(2.3,2.5,1.2,0.1),mgp=c(1.3,0.5,0))
-resCC=analysisRandom(pop=ccD,speciesL=plantList[c(2:3,5:length(plantList))],
-                     meteoVars=names(meteoData)[2:7],measure="biomass",
-                     organism="plant",LTERsite="CedarCreek")
-
-
-resCC=analysisRandom(pop=ccD,speciesL=plantList[2],
-                     meteoVars=names(meteoData)[2:7],measure="biomass",
-                     organism="plant",LTERsite="CedarCreek")
-
-
-resCC=analysisRandom(pop=ccD,speciesL=plantList[2:3],
-                     meteoVars=names(meteoData)[2:7],measure="biomass",
-                     organism="plant",LTERsite="CedarCreek")
-
 
 #store results
-results=rbind(resCC,resHopp)
+results=rbind(resCC_1,resCC_2,resHopp)
 write.csv(resCC,"Results1/results_CedarCreek.csv",row.names=F)
-
-
 
 
 
