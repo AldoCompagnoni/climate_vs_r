@@ -1,172 +1,91 @@
-#THE PLAN:
-#Climate data: http://sev.lternet.edu/data/sev-1
-#Demographic data: http://sev.lternet.edu/data/sev-106
+# Bayesian metapopulation model with grasshopper data 
 setwd("C:/Users/ac79/MEGA/Projects/LTER/")
 source("C:/Users/ac79/Documents/CODE/climate_vs_r/functions.R")
 
-#Data
-#Meteo
-climateSEV=read.csv("Data/Sevilleta/sev1_meteorology_20140111.csv")
-
-#Demographic Data
-#Grasshopppers
-hoppers=read.table("Data/Sevilleta/sev106_hopperdynamics_20150826.txt",header=T,sep=",")
-#Coyote
-coyote=read.table("Data/Sevilleta/sev112_coyotedens_01062009_RobertParmenter.txt",header=T,sep=",")
-#Rabbits
-rabbit=read.table("Data/Sevilleta/sev113_rabbitdens_20040226_RobertParmenter.txt",header=T,sep=",")
-rabbits=read.table("Data/Sevilleta/sev023_rabbitpopns_20150310_RobertParmenter.txt",header=T,sep=",")
-#Ground arthopod
-arthrop=read.csv("Data/Sevilleta/sev029_arthropop_02162009_0_DavidLightfoot.csv",header=T,sep=",")
-#Small mammals
-mamm=read.csv("Data/Sevilleta/sev008_rodentpopns_20160701_SethNewsome.csv")
-#Ants
+#Read data ---------------------------------------------------------------------------
+hoppers <- read.table("Data/Sevilleta/sev106_hopperdynamics_20150826.txt",header=T,sep=",")
 
 
-###################################################################################################
-#Format#########################################
-###################################################################################################
+# Format =============================================================================
 
-#Species count data---------------------------------------------------------------------------------
-hoppers$YEAR=as.numeric(substr(hoppers$PER,1,4))
-hoppers$SEASON=substr(hoppers$PER,5,5)
-hoppers=rename(hoppers,year=YEAR,site=SITE,species=SPECIES,abund=CNT)
-hoppersGr=formatDemographicSite(hoppers)
+# Species count data------------------------------------------------------------------
+hoppers <- mutate(hoppers, YEAR = as.numeric(substr(hoppers$PER,1,4)),
+                  SEASON = substr(hoppers$PER,5,5))
+hoppers <- rename(hoppers,year=YEAR,site=SITE,species=SPECIES,abund=CNT)
 
-#Coyote------------------------------------------------------------
-#coyote$species="coyote"
-#coyoteS=summarise(group_by(coyote,year,species),density=mean(density,na.rm=T))
-#coyoteS$density=logGr(coyoteS$density)
-#names(coyoteS)[3]="logGr"
-#coyoteS=coyoteS[-which(is.na(coyoteS$logGr)),]
+# experimental design
+exp_des <-  distinct(select(hoppers,year,site,WEB,TRN))
 
-#Rabbits------------------------------------------------------------
-#rabbit$species="rabbit"
-#rabbitS=summarise(group_by(rabbit,year,species),density=mean(density_estimate,na.rm=T))
-#rabbitS$density=logGr(rabbitS$density)
-#names(rabbitS)[3]="logGr"
-#rabbitS=rabbitS[-which(is.na(rabbitS$logGr)),]
+# aggregate counts regardless of individual characteristics
+# IGNORE SUBSTRATE for now.
+hoppers <-  hoppers %>% 
+            group_by(year,site,species,WEB,TRN) %>% 
+            summarise(abund = sum(abund))
 
-#Rabbits2--------------------------------------------------------------------------------
-rabbits <- rename(rabbits, year = Year, site = leg)
-rabbits_cnt <- summarise(group_by(rabbits,year,site,species),abund=n())
-rabbits_cnt <- subset(rabbits_cnt , species != "")
-rabbitsGr   <- formatDemographicSite(rabbits_cnt)
+# Calculate species rank (by total abundance)
+spp_abund <- hoppers %>% 
+             group_by(species) %>% 
+             summarise(total = sum(abund))
+spp_rank  <- arrange(spp_abund,desc(total))
 
-# Ground arthropods----------------------------------------------------------------------------
-arthrop$Count[arthrop$Count==-888]=NA
-# Only species at the Genus level
-arthrop=arthrop[-which(arthrop$Genus==-888),]
+# Focus abundant species, one site only (simplicity)
+trpa <- filter(hoppers, species == "TRPA" & site == "LATR" & 
+                 year == 1992)
 
-# Spp replication withint Site
-arthropS=summarise(group_by(arthrop,Site,Year,Genus,Species),count=sum(Count,na.rm=T))
-arthropS$species=paste(arthropS$Genus,arthropS$Species,sep="_")
-arthropS <- rename(arthropS, year = Year, site = Site, abund = count)
-arthGr   <- formatDemographicSite(arthropS)
-
-# Small mammals-------------------------------------------------------------------------
-mammS  <- summarise(group_by(mamm,year,location,species),count=n())
-mammS  <- rename(mammS, site = location, abund = count)
-mammGr <- formatDemographicSite(mammS) 
+# Account for zeroes: merge with 
+trpa <- merge(filter(exp_des,site == "LATR" & year == 1992),
+                     trpa,all=T)
+trpa$abund[is.na(trpa$abund)] <- 0  #look up "replace"
 
 
-#Climate data---------------------------------------------------------------------------------
-climateSEV$Temp_C[climateSEV$Temp_C==-999]=NA
-climateSEV$Temp_C[climateSEV$Temp_C < -39.9]=NA
-climateSEV$Precip[climateSEV$Precip==-999]=NA
-climateSEV$Precip[climateSEV$Precip<0]=NA
-climateSEV=subset(climateSEV,Station_ID == 42 | Station_ID == 49 | Station_ID == 50)#exclude sites we don't care about!
+# Model abundance --------------------------------------------------------------
 
-#Daily means/sums
-dailyClim=summarise(group_by(climateSEV,Year,Jul_Day,Station_ID),
-                    max_temp=max(Temp_C,na.rm=T),min_temp=min(Temp_C,na.rm=T),
-                    precip=sum(Precip,na.rm=T))
-dailyClim$avg_Temp=(dailyClim$max_temp + dailyClim$min_temp)/2 
+# matrix of observations
+y <- select(trpa,WEB,TRN,abund) %>% 
+        spread(TRN,abund) %>% 
+          select(-WEB) %>% as.matrix()
 
-#Spring and summer temp./precip.
-spr=summarise(group_by(subset(dailyClim, Jul_Day<152),Year,Station_ID),
-              sprTemp=mean(avg_Temp,na.rm=T),sprPrec=sum(precip,na.rm=T))
-summ=summarise(group_by(subset(dailyClim, Jul_Day<274),Year,Station_ID),
-               summTemp=mean(avg_Temp,na.rm=T),summPrec=sum(precip,na.rm=T))
-yrClim=summarise(group_by(dailyClim,Year,Station_ID),yrTemp=mean(avg_Temp,na.rm=T),yrPrec=sum(precip,na.rm=T))
-yrClim$Year=yrClim$Year+1      #Associate this data with NEXT year!
-
-climateList=list(spr,summ,yrClim)
-annualClimate=Reduce(function(...) merge(...),climateList)
-#I use the PINION-JUNIPER data (Cerro Montoso)
-pjClimate1=subset(annualClimate, Station_ID==42)[,-2]
-names(pjClimate1)[1]="year"
-
-#Create squared values
-pjClimate2=pjClimate1[,-1]^2
-colnames(pjClimate2)=paste0(names(pjClimate1)[-1],"_2")
-pjMeteoData=cbind(pjClimate1,pjClimate2)
+#Format data for WinBUGS
+sev_dat <- list(n      = 5, 
+                J      = 6,
+                y      =  y) 
 
 
-########################################################################################################################################################
-#ANALYSIS############################################################################
-########################################################################################################################################################
-hoppersD=merge(hoppersGr,pjMeteoData)
+# WinBUGS model
+sink("Analysis1/SEV_hop_9.28.txt")
+cat("
+  model {
 
-#Summary output information (this will eventually include sensitivity)
-tiff("Results1/sevilleta_Grasshoppers.tiff",unit="in",height=6.3,width=6.3,res=500,compression="lzw")
+    #Priors
+    beta ~ dnorm(0, 1.0E-4)
+    lambda <- exp(beta)
+    p ~ dunif(0,1)
 
-par(mfrow=c(4,4),mar=c(2.5,2.4,1,0.1),mgp=c(1.3,0.5,0),lwd=1)
-resHoppers=analysisRandom(pop=hoppersD,
-                     meteoVars=names(pjMeteoData)[2:6],measure="count",
-                     organism="arthropod",LTERsite="Sevilleta")
-dev.off()
-
-
-#coyotes--------------------------------------------
-#coyoteD=merge(coyoteS,pjMeteoData)
-
-#tiff("Results1/sevilleta_Mammals.tiff",unit="in",height=8,width=6.3,res=500,compression="lzw")
-#par(mfrow=c(4,4),mar=c(2.5,2.4,1,0.1),mgp=c(1.3,0.5,0),lwd=1)
-
-#Small rodents---------------------------------------------------------------
-mammD=merge(mammGr,pjMeteoData)
-
-tiff("Results1/sevilleta_Mammals.tiff",unit="in",height=8,width=6.3,res=500,compression="lzw")
-
-par(mfrow=c(5,3),mar=c(2.5,2.4,1,0.1),mgp=c(1.3,0.5,0),lwd=1)
-resMamm=analysisRandom(pop=mammD,
-                     meteoVars=names(pjMeteoData)[2:7],measure="count",
-                     organism="mammal",LTERsite="Sevilleta")
-dev.off()
-
-#Coyote-----------------------------------------------------------------------
-#resCoyote=analysisRandom(pop=coyoteD,speciesL="coyote",
-#                        meteoVars=names(pjMeteoData)[2:7],measure="density",
-#                        organism="mammal",LTERsite="Sevilleta")
-
-#Rabbits----------------------------------------------------------------
-#rabbitD=merge(rabbitS,pjMeteoData)
-
-#resRabb=analysisRandom(pop=rabbitD,speciesL="rabbit",
-#                       meteoVars=names(pjMeteoData)[2:7],measure="density",
-#                       organism="mammal",LTERsite="Sevilleta")
-
-#Rabbits2----------------------------------------------------------------
-rabbit2D=merge(rabbitsGr,pjMeteoData)
-
-par(mfrow=c(1,2))
-resRabb2=analysisRandom(pop=rabbit2D,
-                     meteoVars=names(pjMeteoData)[2:7],measure="count",
-                     organism="mammal",LTERsite="Sevilleta")
+    #likelihood
+    for (i in 1:n) {
+      N[i] ~ dpois(lambda)
+      for (j in 1:J) {
+        y[i,j] ~ dbin(p, N[i])
+      }
+    }
+  }",fill = TRUE)
+sink()
 
 
-#Ground arthropods----------------------------------------------------------------
-arthD=merge(arthGr,pjMeteoData)
+# Initial values
+inits <- function(){ list(beta = rnorm(1, 0, 1), p = runif(1,0,1), 
+                          N = rpois(5, 10)) }
 
-tiff("Results1/sevilleta_Arthr.tiff",unit="in",height=8,width=6.3,res=500,compression="lzw")
-par(mfrow=c(1,2),mar=c(2.5,2.4,1,0.1),mgp=c(1.3,0.5,0),lwd=1)
-resArth=analysisRandom(pop=arthD,#speciesL=arthList,
-                      meteoVars=names(pjMeteoData)[2:7],measure="count",
-                      organism="arthropod",LTERsite="Sevilleta")
-dev.off()
+# Parameters monitored
+params <- c("beta","p","lambda","N")
 
+# MCMC settings
+ni <- 100000
+nt <- 50
+nb <- 10000
+nc <- 3
 
-#Store summary results
-results=rbind(resHoppers,resRabb2,resArth,resMamm)
-write.csv(results,"Results1/resultsSevilleta.csv",row.names=F)
+# Call WinBUGS from R (BRT 215 min)
+library(R2WinBUGS)
+out2 <- bugs(sev_dat, inits, params, "C:/Users/ac79/Mega/Projects/LTER/Analysis1/SEV_hop_9.28.txt", 
+             n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, debug = TRUE, working.directory = getwd())
